@@ -1,0 +1,3 @@
+C:/Users/khale/Desktop/NETWORKING HW/HW4_NW/cmake-build-debug/CMakeFiles/HW4_NW.dir
+C:/Users/khale/Desktop/NETWORKING HW/HW4_NW/cmake-build-debug/CMakeFiles/edit_cache.dir
+C:/Users/khale/Desktop/NETWORKING HW/HW4_NW/cmake-build-debug/CMakeFiles/rebuild_cache.dir
