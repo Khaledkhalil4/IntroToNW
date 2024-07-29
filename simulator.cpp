@@ -50,6 +50,29 @@ public:
         servers.resize(serversNum); // Initialize the servers vector with the number of servers
     }
 
+    bool isServerFull(int serverID){
+        return servers[serverID].size() >= queueSizes[serverID];
+    }
+    int findOutServer(){
+
+        uniform_real_distribution<double> uni_d(0.0, 1.0);
+        random_device rd;
+        mt19937 gen(rd());
+        double probVal = uni_d(gen);
+        double cumulativeProb = 0.0;
+        int serverIndex = 0;
+
+        for (size_t i = 0; i < serversProb.size(); ++i) {
+            cumulativeProb += serversProb[i];
+            if (probVal <= cumulativeProb) {
+                serverIndex = i;
+                break;
+            }
+        }
+        return serverIndex;
+    }
+
+
 };
 
 int main(int argc, char* argv[]){
