@@ -12,10 +12,10 @@ using namespace std;
 class Packet {
 public:
     double arrivalTime;
-    double startProcessingTime;
+    double startProcessingTime; // we can delete I didn't use it
     double waitTime;
     double finishTime;
-    double serverID;
+    double serverID; // we can delete I didn't use it
     double processTime;
 
     Packet(double arrivalTime, double startProcessingTime, double waitTime = 0, double finishTime = 0, int serverId = -1): //maybe we don't need serverID
@@ -98,7 +98,7 @@ public:
     void updateQueue(Server& server){
         vector<Packet>& curQueue = server.queue;
         vector<Packet> updatedQueue;
-        for(int i = 0; i < server.queueSize; i++){
+        for(int i = 0; i < curQueue.size(); i++){
             if(server.curTime > curQueue[i].finishTime) //the job is finished so we don't add it to the queue.
                 continue;
             updatedQueue.push_back(curQueue[i]);
