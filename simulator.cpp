@@ -6,54 +6,77 @@
 #include <string>
 #include <random>
 #include <algorithm>
+#include <queue>
 
 using namespace std;
 
 class Packet {
 public:
-    double arrivalTime;
-    double processingTime;
-    double waitTime;
-    double finishTime;
-    double serverID;
+    int arrivalTime;
+    int processingTime;
+    int waitTime;
+    int finishTime;
 
-    Packet(double arrivalTime, double processingTime, double waitTime = 0, double finishTime = 0, int serverId = -1): //maybe we don't need serverID
-    arrivalTime(arrivalTime), processingTime(processingTime), waitTime(waitTime),finishTime(finishTime),
-        serverID(serverId){};
+    Packet(int arrivalTime, int processingTime, int waitTime = 0, int finishTime = 0):
+            arrivalTime(arrivalTime), processingTime(processingTime), waitTime(waitTime),finishTime(finishTime) {};
+};
+
+class Server {
+public:
+    Server(double serverProb_, int queueSize_, double miu_) : serverProb(serverProb_), queueSize(queueSize_), miu(miu_),packets() {}
+    bool isServerFull() {
+        return packets.size() > queueSize;
+    }
+    bool acceptRequest(Packet packet ,int t){
+        packet.arrivalTime = t;
+        if (isServerFull()){
+            return false;
+        }
+        packets.push_back(packet);
+    }
+
+    void handleRequests(int t){
+        for(int i=0 ;i<miu ; i++){
+            totalWaitTime += t - packets.front().arrivalTime;
+            packets.pop_front();
+        }
+    }
+
+    //the curr packet
+    double serverProb;
+    int queueSize;
+    double miu;
+    std::queue<Packet> packets;
+    int totalWaitTime;
+
 };
 
 
-class Simulator{
-private:
-    double simTime;
-    int serversNum;
-    vector<double> serversProb; // Probabilty of each req going to each server
-    double lambda;
-    vector<double> queueSizes; // [i] is the queue size of server i
-    vector<double> muis; //muis[i] is the mui of server i
-    double curTime; //maybe needs more ?
 
+class Simulator {
+private:
+    int simTime;
+    int serversNum;
+    double lambda;
+    vector<Server> servers ;
+    double curTime; //maybe needs more ?
     int totalRejected; // to return
     int totalAccepted; // to return
     int totalServiceTime; // for avg service time
     int totalWaitTime; // for avg wait time
-    vector<vector<Packet>> servers; // where each vec is a server, maybe can make it a class too whatever :P
-                                    // used vector instead of queue if we want to access specific index
+    int tEnd;
+    // used vector instead of queue if we want to access specific index
 
 public:
-    Simulator(double simTime, int serversNum, vector<double> serversProb,
-    double lambda, vector<double> queueSizes, vector<double> muis, double curTime = 0)
-            : simTime(simTime), serversNum(serversNum), serversProb(serversProb),
-            lambda(lambda), queueSizes(queueSizes), muis(muis), curTime(curTime), totalRejected(0),
-              totalAccepted(0), totalServiceTime(0), totalWaitTime(0)
-    {
-        servers.resize(serversNum); // Initialize the servers vector with the number of servers
+    Simulator(int simTime, int serversNum, double lambda, vector<Server> servers, double curTime = 0)
+            : simTime(simTime), serversNum(serversNum),
+              lambda(lambda),servers(servers) curTime(curTime), totalRejected(0),
+    totalAccepted(0), totalServiceTime(0), totalWaitTime(0) ,tEnd(0) {
     }
 
-    bool isServerFull(int serverID){
-        return servers[serverID].size() >= queueSizes[serverID];
-    }
-    int findOutServer(){
+
+
+    int findOutServer() {
 
         uniform_real_distribution<double> uni_d(0.0, 1.0);
         random_device rd;
@@ -73,34 +96,73 @@ public:
     }
 
 
-};
+    void run() {
+        int t = 0;
+        for(t =0 ; t < simTime ; t++)
+        {
+            //we get lambda packets in each t
+            for(int requestCounter =0 ; requestCounter <lambda ; requestCounter++ )
+            {
+                Packet packet(t,0);
+                int serverIndex = findOutServer();
+                Server &server =  servers[serverIndex];
+                bool accepted = server.acceptRequest(packet,t);
+                if(accepted){
+                    totalAccepted++;
+                }
+                else totalRejected++;
+                //server.handleRequests(t);
+            }
+        }
+        for (;;t++) {
+            bool finish = true;
+            for (int serverIndex = 0; serverIndex < serversNum; serverIndex++) {
+                if (!servers[serverIndex].packets.empty()) {
+                    servers[serverIndex].handleRequests(t);
+                    finish = false;
+                }
+            }
+            if (finish) break;//t-1
+        }
+        tEnd = t-1;
 
-int main(int argc, char* argv[]){
-    //~~~~~~~~~~Taking the inputs ~~~~~~~~~~~~//
-    double simTime;
-    int serversNum;
-    vector<double> serversProb;
-    double lambda;
-    vector<double> queueSizes;
-    vector<double> muis;
-    int i = 1;
-    simTime = stod(string(argv[i++]));
-    serversNum = stoi(string(argv[i++]));
-    for(int j = 0 ; j < serversNum; j++){
-        serversProb.push_back(stod(string(argv[i++])));
+        int totalWaitTime =0 ;
+        for (int serverIndex = 0; serverIndex < serversNum; serverIndex++) {
+            totalWaitTime += servers[serverIndex].totalWaitTime;
+        }
+        double avgWaitTime = totalWaitTime / totalAccepted;
+
+    };
+
+    int main(int argc, char* argv[]){
+        //~~Taking the inputs ~~~~~~~~~~~~//
+        int simTime;
+        int serversNum;
+        vector<double> serversProb;
+        double lambda;
+        vector<double> queueSizes;
+        vector<double> muis;
+        int i = 1;
+        simTime = stoi(string(argv[i++]));
+        serversNum = stoi(string(argv[i++]));
+        vector<Server> servers(serversNum);
+
+        for(int j = 0 ; j < serversNum; j++){
+            servers[j].serverProb = stod(string(argv[i++]));
+        }
+        lambda = stod(string(argv[i++]));
+        for(int j = 0 ; j < serversNum; j++){
+            servers[j].queueSize = stod(string(argv[i++]));
+        }
+        for(int j = 0 ; j < serversNum; j++){
+            servers[j].miu = stod(string(argv[i++]));
+        }
+
+        //~~~~~~~~~~ initializing and running the Sim ~~~~~~~~~~~//
+        Simulator sim(simTime,serversNum,lambda,servers);
+        sim.run();
+        //something like sum.run;
+
+        return 0;
+
     }
-    lambda = stod(string(argv[i++]));
-    for(int j = 0 ; j < serversNum; j++){
-        queueSizes.push_back(stod(string(argv[i++])));
-    }
-    for(int j = 0 ; j < serversNum; j++){
-        muis.push_back(stod(string(argv[i++])));
-    }
-
-    //~~~~~~~~~~ initializing and running the Sim ~~~~~~~~~~~//
-    Simulator sim(simTime,serversNum,serversProb,lambda,queueSizes,muis);
-    //something like sum.run;
-
-    return 0;
-
-}
