@@ -16,11 +16,11 @@ public:
     double waitTime;
     double finishTime;
     double serverID;
-    double proccessTime;
+    double processTime;
 
     Packet(double arrivalTime, double startProcessingTime, double waitTime = 0, double finishTime = 0, int serverId = -1): //maybe we don't need serverID
     arrivalTime(arrivalTime), startProcessingTime(startProcessingTime), waitTime(waitTime), finishTime(finishTime),
-    serverID(serverId),proccessTime(0){};
+    serverID(serverId),processTime(0){};
 };
 
 
@@ -39,26 +39,24 @@ public:
                     miu(miu_),packets() {};
 
     bool isServerFull() {
-        return queue.size() >= queueSize; // idk if > or >=
+        return queue.size() >= queueSize; // idk if > or >= mostly >=
     }
 
     bool addPacketToQueue( Packet& packet) {
         if (isServerFull()) {
             return false;
         }
-        if(queue.size() != 0) { //there is more than one packet in the queue
-            packet.waitTime += (packets[queue.size() - 1].finishTime - packet.arrivalTime);
-            packet.finishTime = packet.arrivalTime + packet.waitTime + packet.proccessTime;
+        if(!queue.empty()) { //there is more than one packet in the queue
+            packet.waitTime += (queue.back().finishTime - packet.arrivalTime);
+            packet.finishTime = packet.arrivalTime + packet.waitTime + packet.processTime;
+        }else{
+            packet.startProcessingTime = curTime;
+            packet.finishTime = packet.startProcessingTime + packet.processTime;
         }
         queue.push_back(packet);
         return true;
 
     }
-
-
-
-
-
 };
 
 class Simulator{
@@ -69,7 +67,6 @@ private:
     double lambda;
     vector<double> queueSizes; // [i] is the queue size of server i
     vector<double> muis; //muis[i] is the mui of server i
-    double curTime; //maybe needs more ?
 
     int totalRejected; // to return
     int totalAccepted; // to return
@@ -83,11 +80,11 @@ public:
     Simulator(double simTime, int serversNum, vector<double> serversProb,
     double lambda, vector<double> queueSizes, vector<double> muis, double curTime = 0)
             : simTime(simTime), serversNum(serversNum), serversProb(serversProb),
-            lambda(lambda), queueSizes(queueSizes), muis(muis), curTime(curTime), totalRejected(0),
+            lambda(lambda), queueSizes(queueSizes), muis(muis),  totalRejected(0),
               totalAccepted(0), totalServiceTime(0), totalWaitTime(0), tEnd(0)
     {
         for(int i = 0; i < serversNum; i++){
-            servers.push_back(Server(serversProb[i],queueSizes[i],muis[i]));
+            servers.emplace_back(serversProb[i],queueSizes[i],muis[i]);
         }
     }
 
@@ -133,44 +130,39 @@ public:
         double avgWaitingTime = totalAccepted > 0 ? totalWaitTime/totalAccepted : 0;
         double avgServiceTime = totalAccepted > 0 ? totalServiceTime/totalAccepted : 0;
 
-        cout << totalAccepted << " ";
-
-        cout << totalRejected << " ";
-
-        cout << totalAccepted << " " << totalRejected << " " << tEnd << " " << avgWaitingTime << " " << avgServiceTime << endl;
+        cout << totalAccepted << " "
+             << totalRejected << " "
+             << tEnd << " "
+             << avgWaitingTime << " "
+             << avgServiceTime << endl;
     }
 
     void run() {
-        double curTime = 0;
-        while(curTime < simTime) {
+        double time = 0;
+
+        while(time < simTime) {
             int serverIndex = findOutServer();
-            Packet toAdd(curTime,0,0,0,serverIndex);
+            Packet toAdd(time, 0, 0, 0, serverIndex);
+            toAdd.processTime = poissonTimeDist(muis[serverIndex]);
             servers[serverIndex].packets.push_back(toAdd);
-            curTime += poissonTimeDist(lambda);
+            time += poissonTimeDist(lambda);
         }
+
         for(int i = 0; i < serversNum; i++){
             Server& curServer = servers[i];
             for(int j = 0; j < curServer.packets.size(); j++){
                 vector<Packet>& packets = curServer.packets;
-                packets[j].proccessTime = poissonTimeDist(curServer.miu);
-                if (j == 0){
-                    curServer.curTime = packets[j].arrivalTime;
-                }else{
-                    curServer.curTime += (packets[j - 1].arrivalTime - packets[j].arrivalTime); //cur time is when the next one arrived
-                }
+                curServer.curTime = max(curServer.curTime, packets[j].arrivalTime);
                 updateQueue(curServer);
                 if(curServer.addPacketToQueue(packets[j])){
                     totalAccepted++;
-                    totalServiceTime += packets[j].proccessTime;
+                    totalServiceTime += packets[j].processTime;
                     totalWaitTime += packets[j].waitTime;
                     tEnd = max(tEnd,packets[j].finishTime);
                 }else
                     totalRejected++;
             }
-
-
         }
-
         printOutput();
     }
 
@@ -200,7 +192,7 @@ int main(int argc, char* argv[]){
 
     //~~~~~~~~~~ initializing and running the Sim ~~~~~~~~~~~//
     Simulator sim(simTime,serversNum,serversProb,lambda,queueSizes,muis);
-    //something like sum.run;
+    sim.run();
 
     return 0;
 
