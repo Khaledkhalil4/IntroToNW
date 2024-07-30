@@ -129,6 +129,17 @@ public:
         return serverIndex;
     }
 
+    void printOutput(){
+        double avgWaitingTime = totalAccepted > 0 ? totalWaitTime/totalAccepted : 0;
+        double avgServiceTime = totalAccepted > 0 ? totalServiceTime/totalAccepted : 0;
+
+        cout << totalAccepted << " ";
+
+        cout << totalRejected << " ";
+
+        cout << totalAccepted << " " << totalRejected << " " << tEnd << " " << avgWaitingTime << " " << avgServiceTime << endl;
+    }
+
     void run() {
         double curTime = 0;
         while(curTime < simTime) {
@@ -160,11 +171,7 @@ public:
 
         }
 
-        int totalWaitTime = 0;
-        for (int serverIndex = 0; serverIndex < serversNum; serverIndex++) {
-            totalWaitTime += servers[serverIndex].totalWaitTime;
-        }
-        double avgWaitTime = totalWaitTime / totalAccepted;
+        printOutput();
     }
 
 };
