@@ -16,39 +16,47 @@ public:
     double waitTime;
     double finishTime;
     double serverID;
+    double proccessTime;
 
     Packet(double arrivalTime, double startProcessingTime, double waitTime = 0, double finishTime = 0, int serverId = -1): //maybe we don't need serverID
     arrivalTime(arrivalTime), startProcessingTime(startProcessingTime), waitTime(waitTime), finishTime(finishTime),
-    serverID(serverId){};
+    serverID(serverId),proccessTime(0){};
 };
 
 
 class Server {
 public:
-    Server(double serverProb_, int queueSize_, double miu_) : serverProb(serverProb_), queueSize(queueSize_), miu(miu_),packets() {}
-    bool isServerFull() {
-        return packets.size() >= queueSize; // idk if > or >=
-    }
-    bool acceptRequest(Packet packet ,int t){
-        packet.arrivalTime = t;
-        if (isServerFull()){
-            return false;
-        }
-        packets.push_back(packet);
-    }
-
-    void handleRequests(int t){
-        for(int i=0 ;i<miu ; i++){
-            totalWaitTime += t - packets.front().arrivalTime;
-          //  packets.pop_front();
-        }
-    }
-
     double serverProb;
     int queueSize;
     double miu;
     vector<Packet> packets;
+    vector<Packet> queue;
     int totalWaitTime;
+    double curTime;
+
+
+    Server(double serverProb_, int queueSize_, double miu_) : serverProb(serverProb_), queueSize(queueSize_),
+                    miu(miu_),packets() {};
+
+    bool isServerFull() {
+        return queue.size() >= queueSize; // idk if > or >=
+    }
+
+    bool addPacketToQueue( Packet& packet) {
+        if (isServerFull()) {
+            return false;
+        }
+        if(queue.size() != 0) { //there is more than one packet in the queue
+            packet.waitTime += (packets[queue.size() - 1].finishTime - packet.arrivalTime);
+            packet.finishTime = packet.arrivalTime + packet.waitTime + packet.proccessTime;
+        }
+        queue.push_back(packet);
+        return true;
+
+    }
+
+
+
 
 
 };
@@ -90,6 +98,17 @@ public:
         mt19937 gen(rd());
         return dist(gen);
     }
+    void updateQueue(Server& server){
+        vector<Packet>& curQueue = server.queue;
+        vector<Packet> updatedQueue;
+        for(int i = 0; i < server.queueSize; i++){
+            if(server.curTime > curQueue[i].finishTime) //the job is finished so we don't add it to the queue.
+                continue;
+            updatedQueue.push_back(curQueue[i]);
+        }
+        server.queue = updatedQueue; // we have the queue without the finished jobs :D
+    }
+
 
     int findOutServer(){
 
@@ -122,7 +141,20 @@ public:
             Server& curServer = servers[i];
             for(int j = 0; j < curServer.packets.size(); j++){
                 vector<Packet>& packets = curServer.packets;
-                double proccessTime = poissonTimeDist(curServer.miu);
+                packets[j].proccessTime = poissonTimeDist(curServer.miu);
+                if (j == 0){
+                    curServer.curTime = packets[j].arrivalTime;
+                }else{
+                    curServer.curTime += (packets[j - 1].arrivalTime - packets[j].arrivalTime); //cur time is when the next one arrived
+                }
+                updateQueue(curServer);
+                if(curServer.addPacketToQueue(packets[j])){
+                    totalAccepted++;
+                    totalServiceTime += packets[j].proccessTime;
+                    totalWaitTime += packets[j].waitTime;
+                    tEnd = max(tEnd,packets[j].finishTime);
+                }else
+                    totalRejected++;
             }
 
 
