@@ -1,6 +1,7 @@
 //
 // Created by Khaled on 7/28/2024.
 //
+
 #include <iostream>
 #include <vector>
 #include <string>
@@ -12,50 +13,41 @@ using namespace std;
 class Packet {
 public:
     double arrivalTime;
-    double startProcessingTime; // we can delete I didn't use it
     double waitTime;
     double finishTime;
-    double serverID; // we can delete I didn't use it
     double processTime;
 
-    Packet(double arrivalTime, double startProcessingTime, double waitTime = 0, double finishTime = 0, int serverId = -1): //maybe we don't need serverID
-    arrivalTime(arrivalTime), startProcessingTime(startProcessingTime), waitTime(waitTime), finishTime(finishTime),
-    serverID(serverId),processTime(0){};
+    Packet(double arrivalTime, double waitTime = 0, double finishTime = 0): //maybe we don't need serverID
+    arrivalTime(arrivalTime), waitTime(waitTime), finishTime(finishTime), processTime(0){};
 };
 
 
 class Server {
 public:
-    double serverProb;
     int queueSize;
-    double miu;
-    vector<Packet> packets;
-    vector<Packet> queue;
-    int totalWaitTime;
+    vector<Packet> packets; //contains all the packets allocated to this server
+    vector<Packet> queue;   // contains the packets that actually currently on the queue for the server
     double curTime;
 
 
-    Server(double serverProb_, int queueSize_, double miu_) : serverProb(serverProb_), queueSize(queueSize_),
-                    miu(miu_),packets() {};
+    Server( int queueSize_):queueSize(queueSize_), packets() {};
 
     bool isServerFull() {
-        return queue.size() >= queueSize; // idk if > or >= mostly >=
+        return queue.size() >= queueSize;
     }
 
-    bool addPacketToQueue( Packet& packet) {
+    bool addPacketToQueue(Packet& packet) {
         if (isServerFull()) {
             return false;
         }
-        if(!queue.empty()) { //there is more than one packet in the queue
-            packet.waitTime += (queue.back().finishTime - packet.arrivalTime);
+        if(!queue.empty()){ //there is more than one packet in the queue
+            packet.waitTime = (queue.back().finishTime - packet.arrivalTime);
             packet.finishTime = packet.arrivalTime + packet.waitTime + packet.processTime;
         }else{
-            packet.startProcessingTime = curTime;
-            packet.finishTime = packet.startProcessingTime + packet.processTime;
+            packet.finishTime = curTime + packet.processTime;
         }
         queue.push_back(packet);
         return true;
-
     }
 };
 
@@ -78,13 +70,13 @@ private:
 
 public:
     Simulator(double simTime, int serversNum, vector<double> serversProb,
-    double lambda, vector<double> queueSizes, vector<double> muis, double curTime = 0)
+    double lambda, vector<double> queueSizes, vector<double> muis)
             : simTime(simTime), serversNum(serversNum), serversProb(serversProb),
-            lambda(lambda), queueSizes(queueSizes), muis(muis),  totalRejected(0),
-              totalAccepted(0), totalServiceTime(0), totalWaitTime(0), tEnd(0)
+            lambda(lambda), queueSizes(queueSizes), muis(muis), totalRejected(0),
+            totalAccepted(0), totalServiceTime(0), totalWaitTime(0), tEnd(0)
     {
         for(int i = 0; i < serversNum; i++){
-            servers.emplace_back(serversProb[i],queueSizes[i],muis[i]);
+            servers.emplace_back(queueSizes[i]);
         }
     }
 
@@ -95,27 +87,26 @@ public:
         mt19937 gen(rd());
         return dist(gen);
     }
+
     void updateQueue(Server& server){
         vector<Packet>& curQueue = server.queue;
         vector<Packet> updatedQueue;
         for(int i = 0; i < curQueue.size(); i++){
-            if(server.curTime > curQueue[i].finishTime) //the job is finished so we don't add it to the queue.
+            if(server.curTime > curQueue[i].finishTime) //the job is finished, so we don't add it to the queue.
                 continue;
             updatedQueue.push_back(curQueue[i]);
         }
-        server.queue = updatedQueue; // we have the queue without the finished jobs :D
+        server.queue = updatedQueue; //we have the queue without the finished jobs :D
     }
 
 
     int findOutServer(){
-
         uniform_real_distribution<double> uni_d(0.0, 1.0);
         random_device rd;
         mt19937 gen(rd());
         double probVal = uni_d(gen);
         double cumulativeProb = 0.0;
         int serverIndex = 0;
-
         for (size_t i = 0; i < serversProb.size(); ++i) {
             cumulativeProb += serversProb[i];
             if (probVal <= cumulativeProb) {
@@ -129,7 +120,6 @@ public:
     void printOutput(){
         double avgWaitingTime = totalAccepted > 0 ? totalWaitTime/totalAccepted : 0;
         double avgServiceTime = totalAccepted > 0 ? totalServiceTime/totalAccepted : 0;
-
         cout << totalAccepted << " "
              << totalRejected << " "
              << tEnd << " "
@@ -139,15 +129,13 @@ public:
 
     void run() {
         double time = 0;
-
         while(time < simTime) {
             int serverIndex = findOutServer();
-            Packet toAdd(time, 0, 0, 0, serverIndex);
+            Packet toAdd(time, 0, 0);
             toAdd.processTime = poissonTimeDist(muis[serverIndex]);
             servers[serverIndex].packets.push_back(toAdd);
             time += poissonTimeDist(lambda);
         }
-
         for(int i = 0; i < serversNum; i++){
             Server& curServer = servers[i];
             for(int j = 0; j < curServer.packets.size(); j++){
@@ -165,11 +153,10 @@ public:
         }
         printOutput();
     }
-
 };
 
 int main(int argc, char* argv[]){
-    //~~~~~~~~~~Taking the inputs ~~~~~~~~~~~~//
+    //~~~~~~~~~~~ Taking the inputs ~~~~~~~~~~//
     double simTime;
     int serversNum;
     vector<double> serversProb;
@@ -184,16 +171,16 @@ int main(int argc, char* argv[]){
     }
     lambda = stod(string(argv[i++]));
     for(int j = 0 ; j < serversNum; j++){
-        queueSizes.push_back(stod(string(argv[i++])));
+        queueSizes.push_back(stod(string(argv[i++])) + 1); //added one cuz the first one is getting processed
     }
     for(int j = 0 ; j < serversNum; j++){
         muis.push_back(stod(string(argv[i++])));
     }
 
     //~~~~~~~~~~ initializing and running the Sim ~~~~~~~~~~~//
+
     Simulator sim(simTime,serversNum,serversProb,lambda,queueSizes,muis);
     sim.run();
 
     return 0;
-
 }
